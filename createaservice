@@ -1,0 +1,20 @@
+# Define the service name and script path
+$serviceName = "MyService"
+$scriptPath = "C:\Path\To\MyScript.ps1"
+
+# Check if the service already exists
+if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
+  # Stop the existing service
+  Stop-Service -Name $serviceName
+
+  # Remove the existing service
+  sc.exe delete $serviceName
+}
+
+# Create the new service
+sc.exe create $serviceName binPath= "powershell.exe -ExecutionPolicy Bypass -File $scriptPath"
+
+# Start the new service
+Start-Service -Name $serviceName
+
+
