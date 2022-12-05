@@ -1,0 +1,35 @@
+<#Make sure to update the Connect-IPA and Get-IPAGroupMember cmdlets with the correct 
+server name and group name, respectively.
+
+Note: This script requires the IPAuthentication module to be installed on the machine
+ where it is running. You can check if the module is installed by running the following 
+ command: Get-Module -ListAvailable | Select-Object -Property Name | Where-Object {$_.Name -eq "IPAuthentication"}.
+  If the module is not installed, you can install it by running the following command: Install-Module -Name IPAuthentication.
+#>
+# Import the necessary modules
+Import-Module IPAuthentication
+
+# Connect to the FreeIPA server
+Connect-IPA -Server "freeipa-server.local"
+
+# Get the list of users in the specified group
+$users = Get-IPAGroupMember -Group "MyGroup"
+
+# Loop through the list of users
+foreach ($user in $users) {
+  # Check if the user already exists on the local machine
+  if (Get-LocalUser -Name $user.Name -ErrorAction SilentlyContinue) {
+    # Update the existing local user with the FreeIPA user's password
+    Set-LocalUser -Name $user.Name -Password (Get-IPAPassword -User $user.Name)
+  }
+  else {
+    # Create the local user with the FreeIPA user's password
+    New-LocalUser -Name $user.Name -Password (Get-IPAPassword -User $user.Name)
+  }
+
+  # Add the user to the local "Users" group
+  Add-LocalGroupMember -Group "Users" -Member $user.Name
+
+  # Allow the user to log on locally
+  Grant-LocalPrivilege -Identity $user.Name -Privilege SeInteractiveLogonRight
+}
