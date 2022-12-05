@@ -1,0 +1,47 @@
+<#Make sure to update the $server, $cred, and $filter variables with the correct values for your FreeIPA server and group.
+
+Note: This script uses the System.DirectoryServices.Protocols namespace to communicate with the LDAP server,
+so it does not require the IPAuthentication module to be installed. However, it does require the ActiveDirectory 
+module to be installed on the machine where it is running. You can check if the module is installed by running the
+following command: Get-Module -ListAvailable | Select-Object -Property Name | Where-Object {$_.Name -eq "ActiveDirectory"}.
+If the module is not installed, you can install it by running the following command: Install-Module -Name ActiveDirectory.#>
+
+
+
+# Import the necessary modules
+Import-Module ActiveDirectory
+
+# Define the LDAP server and port
+$server = "ldap://freeipa-server.local:389"
+
+# Bind to the LDAP server using the specified credentials
+$cred = New-Object System.Management.Automation.PSCredential("cn=Directory Manager", (ConvertTo-SecureString "mypassword" -AsPlainText -Force))
+$connection = [System.DirectoryServices.Protocols.LdapConnection]::new($server)
+$connection.AuthType = [System.DirectoryServices.Protocols.AuthType]::Simple
+$connection.Bind($cred)
+
+# Search the LDAP server for users in the specified group
+$filter = "(&(objectClass=inetOrgPerson)(memberOf=cn=MyGroup,cn=groups,cn=accounts,dc=freeipa-server,dc=local))"
+$searchRequest = New-Object System.DirectoryServices.Protocols.SearchRequest -ArgumentList "dc=my-freeipa-server,dc=com", $filter, [System.DirectoryServices.Protocols.SearchScope]::Subtree, "*"
+$searchResponse = $connection.SendRequest($searchRequest)
+
+# Loop through the list of users
+foreach ($user in $searchResponse.Entries) {
+  # Get the user's name and password
+  $name = $user.Attributes["uid"].GetValues()[0]
+  $password = $user.Attributes["userPassword"].GetValues()[0]
+
+  # Check if the user already exists on the local machine
+  if (Get-LocalUser -Name $name -ErrorAction SilentlyContinue) {
+    # Update the existing local user with the FreeIPA user's password
+    Set-LocalUser -Name $name -Password $password
+  }
+  else {
+    # Create the local user with the FreeIPA user's password
+    New-LocalUser -Name $name -Password $password
+  }
+}
+
+# Disconnect from the LDAP server
+$connection.Dispose()
+
